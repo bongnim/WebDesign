@@ -8,7 +8,7 @@ from django.views.generic import ListView, DetailView, View
 from django.shortcuts import redirect
 from django.utils import timezone
 from .forms import CheckoutForm, CouponForm, RefundForm, PaymentForm
-from .models import Item, OrderItem, Order, Address, Payment, Coupon, Refund, UserProfile
+from .models import Item, OrderItem, Order, WishItem, Wish, Address, Payment, Coupon, Refund, UserProfile
 
 import random
 import string
@@ -362,9 +362,51 @@ class OrderSummaryView(LoginRequiredMixin, View):
             return redirect("/")
 
 
+class WishSummaryView(LoginRequiredMixin, View):
+    def get(self, *args, **kwargs):
+        try:
+            order = Wish.objects.get(user=self.request.user, ordered=False)
+            context = {
+                'object': order
+            }
+            return render(self.request, 'order_summary.html', context)
+        except ObjectDoesNotExist:
+            messages.warning(self.request, "You do not have an active order")
+            return redirect("/")
+
+
 class ItemDetailView(DetailView):
     model = Item
     template_name = "product.html"
+
+@login_required
+def add_to_wish(request, slug):
+    item = get_object_or_404(request, slug)
+    wish_item, created = WishItem.objects.get_or_create(
+        item=item,
+        user=request.user,
+        ordered=False
+    )
+    wish_qs = WishItem.objects.filter(user=request.user, ordered=False)
+    if wish_qs.exists():
+        wish = wish_qs[0]
+        # check if the order item is in the order
+        if wish.items.filter(item__slug=item.slug).exists():
+            wish_item.quantity += 1
+            wish_item.save()
+            messages.info(request, "This item quantity was updated.")
+            return redirect("core:wish-summary")
+        else:
+            wish.items.add(wish_item)
+            messages.info(request, "This item was added to your wish-list.")
+            return redirect("core:wish-summary")
+    else:
+        ordered_date = timezone.now()
+        order = Wish.objects.create(
+            user=request.user, ordered_date=ordered_date)
+        order.items.add(wish_item)
+        messages.info(request, "This item was added to your wish-list.")
+        return redirect("core:wish-summary")
 
 
 @login_required
