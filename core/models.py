@@ -7,9 +7,11 @@ from django_countries.fields import CountryField
 
 
 CATEGORY_CHOICES = (
-    ('S', 'Shirt'),
-    ('SW', 'Sport wear'),
-    ('OW', 'Outwear')
+    ('D', 'Daily'),
+    ('B', 'Book'),
+    ('E', 'Electronics'),
+    ('F', 'Furniture'),
+    ('C', 'Clothes')
 )
 
 LABEL_CHOICES = (
@@ -38,7 +40,8 @@ class Item(models.Model):
     title = models.CharField(max_length=100)
     price = models.FloatField()
     discount_price = models.FloatField(blank=True, null=True)
-    category = models.CharField(choices=CATEGORY_CHOICES, max_length=2)
+    end_time = models.DateTimeField(auto_now_add=True)
+    category = models.CharField(choices=CATEGORY_CHOICES, max_length=1)
     label = models.CharField(choices=LABEL_CHOICES, max_length=1)
     slug = models.SlugField()
     description = models.TextField()
@@ -54,6 +57,11 @@ class Item(models.Model):
 
     def get_add_to_cart_url(self):
         return reverse("core:add-to-cart", kwargs={
+            'slug': self.slug
+        })
+
+    def get_add_to_wish_url(self):
+        return reverse("core:add-to-wish", kwargs={
             'slug': self.slug
         })
 
@@ -88,7 +96,6 @@ class OrderItem(models.Model):
         return self.get_total_item_price()
 
 
-#shopping cart
 class Order(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE)
@@ -131,6 +138,43 @@ class Order(models.Model):
         if self.coupon:
             total -= self.coupon.amount
         return total
+
+class Wish(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,
+                             on_delete=models.CASCADE)
+    ref_code = models.CharField(max_length=20, blank=True, null=True)
+    items = models.ManyToManyField(OrderItem)
+    start_date = models.DateTimeField(auto_now_add=True)
+    ordered_date = models.DateTimeField()
+    ordered = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.user.username
+
+
+class WishItem(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,
+                             on_delete=models.CASCADE)
+    ordered = models.BooleanField(default=False)
+    item = models.ForeignKey(Item, on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.quantity} of {self.item.title}"
+
+    def get_total_item_price(self):
+        return self.quantity * self.item.price
+
+    def get_total_discount_item_price(self):
+        return self.quantity * self.item.discount_price
+
+    def get_amount_saved(self):
+        return self.get_total_item_price() - self.get_total_discount_item_price()
+
+    def get_final_price(self):
+        if self.item.discount_price:
+            return self.get_total_discount_item_price()
+        return self.get_total_item_price()
 
 
 class Address(models.Model):
