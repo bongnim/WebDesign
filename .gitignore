@@ -3,3 +3,6 @@ __pycache__/
 media_root
 static_root
 env
+/.idea/workspace.xml
+/db.sqlite3
+/core/migrations/
